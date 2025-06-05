@@ -1,176 +1,110 @@
 import streamlit as st
 import pandas as pd
+import base64
+import pickle
 import os
 
-# --- Page Config ---
 st.set_page_config(page_title="🍽️ Restaurant Finder", layout="wide")
 
-# --- CSS styles + video background ---
-st.markdown(
-    """
-    <style>
-    /* Full viewport video background */
-    #bg-video {
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100vw;
-        height: 100vh;
-        object-fit: cover;
-        z-index: -1;
-        filter: brightness(0.6); /* darken video for readability */
-    }
+gif_path = "rocket-3972_128.gif"
+with open(gif_path, "rb") as f:
+    gif_base64 = base64.b64encode(f.read()).decode()
 
-    /* Overlay to dim video if needed */
-    #overlay {
-        position: fixed;
-        top:0; left:0; width:100vw; height:100vh;
-        background: rgba(0, 0, 0, 0.4);
-        z-index: 0;
-    }
+st.markdown(f"""
+<style>
+.stApp {{
+    background: url("data:image/gif;base64,{gif_base64}") no-repeat center center fixed;
+    background-size: cover;
+}}
 
-    /* Center everything vertically & horizontally */
-    .main-container {
-        position: relative;  /* to stack above video */
-        z-index: 1;
-        min-height: 100vh;
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        align-items: center;
-        color: white;
-        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        text-align: center;
-        padding: 20px;
-        gap: 40px;
-    }
+.overlay {{
+    background-color: rgba(0,0,0,0.6);
+    padding: 2rem;
+    border-radius: 15px;
+    max-width: 1200px;
+    margin: auto;
+    color: white;
+    backdrop-filter: blur(5px);
+    box-shadow: 0 8px 30px rgba(0,0,0,0.5);
+}}
 
-    h1 {
-        font-size: 3.5rem;
-        font-weight: 900;
-        margin: 0;
-        text-shadow: 0 0 15px rgba(0, 0, 0, 0.8);
-    }
+.restaurant-card {{
+    background-color: rgba(255, 255, 255, 0.1);
+    padding: 1rem 1.5rem;
+    border-radius: 12px;
+    margin-bottom: 1rem;
+    backdrop-filter: blur(3px);
+    color: white;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}}
+</style>
+""", unsafe_allow_html=True)
 
-    .input-container {
-        background: rgba(0,0,0,0.65);
-        padding: 35px 50px;
-        border-radius: 25px;
-        width: 450px;
-        box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
-        backdrop-filter: blur(8.5px);
-        -webkit-backdrop-filter: blur(8.5px);
-        border: 1px solid rgba(255, 255, 255, 0.18);
-    }
+try:
+    with open("models/processed.pkl", "rb") as f:
+        countries_df = pickle.load(f)
+        countries_list = countries_df["Country"].dropna().unique()
+except Exception as e:
+    st.error(f"Failed to load country list from processed.pkl: {e}")
+    st.stop()
 
-    /* Style select boxes with 3D-ish blue glow */
-    div[role="listbox"], div[data-baseweb="select"] > div:first-child {
-        border-radius: 15px !important;
-        border: 2px solid #5e9cff !important;
-        box-shadow: 0 4px 15px rgba(94, 156, 255, 0.6);
-        background: linear-gradient(145deg, #3b6ed6, #2a4bb7);
-        color: white !important;
-        font-weight: 600 !important;
-    }
+st.markdown("""
+<h1 style='text-align: center; font-size: 3rem; margin-bottom: 2rem;'>
+    🍽️ Restaurant Finder
+</h1>
+""", unsafe_allow_html=True)
 
-    div[role="option"]:hover {
-        background-color: #2a4bb7 !important;
-        color: white !important;
-    }
+selected_country = st.selectbox("🌍 Select Country", sorted(countries_list))
 
-    .stSelectbox > div > div {
-        max-width: 400px;
-        margin: auto;
-    }
+country_file = None
+available_files = os.listdir("models")
+for file in available_files:
+    if file.lower() == f"{selected_country.lower()}.pkl":
+        country_file = os.path.join("models", file)
+        break
 
-    .info-box {
-        background: rgba(255, 255, 255, 0.15);
-        border-radius: 15px;
-        padding: 20px;
-        margin: 15px 0;
-        color: white;
-        box-shadow: 0 4px 30px rgba(0, 0, 0, 0.5);
-        text-align: left;
-        transition: transform 0.2s ease;
-    }
+if not country_file:
+    st.error(f"No data file found for '{selected_country}'. Please ensure a .pkl exists.")
+    st.stop()
 
-    .info-box:hover {
-        transform: scale(1.03);
-        background: rgba(255, 255, 255, 0.25);
-    }
-    </style>
+try:
+    df = pd.read_pickle(country_file)
+except Exception as e:
+    st.error(f"Failed to load data for {selected_country}: {e}")
+    st.stop()
 
-    <!-- Video background -->
-    <video autoplay muted loop id="bg-video" playsinline>
-      <source src="https://cdn.pixabay.com/animation/2023/02/13/09/42/09-42-58-584_512.gif" type="video/mp4">
-      Your browser does not support the video tag.
-    </video>
+states = df["State"].dropna().unique()
+selected_state = st.selectbox("🗺️ Select State", sorted(states))
 
-    <!-- Optional overlay -->
-    <div id="overlay"></div>
-    """,
-    unsafe_allow_html=True
-)
+cities = df[df["State"] == selected_state]["City"].dropna().unique()
+selected_city = st.selectbox("🏙️ Select City", sorted(cities))
 
-# Main container div
-st.markdown('<div class="main-container">', unsafe_allow_html=True)
+cuisines = df[
+    (df["State"] == selected_state) &
+    (df["City"] == selected_city)
+]["Primary Cuisine"].dropna().unique()
+selected_cuisine = st.selectbox("🍜 Select Primary Cuisine", sorted(cuisines))
 
-# Title
-st.markdown('<h1>🍴 Restaurant Recommender</h1>', unsafe_allow_html=True)
+filtered_df = df[
+    (df["State"] == selected_state) &
+    (df["City"] == selected_city) &
+    (df["Primary Cuisine"] == selected_cuisine)
+]
 
-# Input container div
-st.markdown('<div class="input-container">', unsafe_allow_html=True)
+st.subheader(f"🔍 Showing {len(filtered_df)} restaurant(s) in {selected_city} for {selected_cuisine} cuisine")
 
-# Folder containing country pkls
-pkl_folder = "models/"
-countries = [f.split(".pkl")[0] for f in os.listdir(pkl_folder) if f.endswith(".pkl")]
+for _, row in filtered_df.iterrows():
+    st.markdown(f"""
+    <div class="restaurant-card">
+        <h4>🍽️ {row['Restaurant Name']}</h4>
+        <p><b>📍 Location:</b> {row['Address']}, {row['City']}, {row['State']}, {row['Country']}</p>
+        <p><b>🍜 Primary Cuisine:</b> {row['Primary Cuisine']} | <b>🍱 Other Cuisines:</b> {row['Cuisines']}</p>
+        <p><b>💵 Price Range:</b> {row['Price range']} | <b>Avg Cost for Two:</b> ₹{row['Average Cost for two']}</p>
+        <p><b>🚚 Online Delivery:</b> {'Yes' if row['Has Online delivery'] else 'No'} |
+           <b>📦 Delivering Now:</b> {'Yes' if row['Is delivering now'] else 'No'} |
+           <b>🍽️ Table Booking:</b> {'Yes' if row['Has Table booking'] else 'No'}</p>
+        <p><b>⭐ Rating:</b> {row['Aggregate rating']} | <b>🗳️ Votes:</b> {row['Votes']}</p>
+    </div>
+    """, unsafe_allow_html=True)
 
-# Step 1: Select Country
-country = st.selectbox("🌍 Select Country", sorted(countries))
-
-if country:
-    data_path = os.path.join(pkl_folder, f"{country}.pkl")
-    try:
-        df_country = pd.read_pickle(data_path)
-    except Exception as e:
-        st.error(f"Failed to load data for {country}: {e}")
-        st.stop()
-
-    # Step 2: Select State or fallback to City
-    states = df_country['State'].dropna().unique() if 'State' in df_country.columns else df_country['City'].unique()
-    state = st.selectbox(f"🏙️ Select State in {country}", sorted(states)) if len(states) > 0 else None
-
-    # Step 3: Select City filtered by state or country
-    if state:
-        cities = df_country[df_country['State'] == state]['City'].unique()
-    else:
-        cities = df_country['City'].unique()
-    city = st.selectbox(f"🌆 Select City in {state if state else country}", sorted(cities))
-
-    # Step 4: Filter and show restaurants
-    if city:
-        filtered_df = df_country[df_country['City'] == city]
-
-        if not filtered_df.empty:
-            st.markdown(f"### 🏆 Top Restaurants in {city}, {state if state else country}")
-            for idx, row in filtered_df.sort_values('Aggregate rating', ascending=False).head(10).iterrows():
-                online_delivery = "Yes" if row['Has Online delivery'] == 1 else "No"
-                delivering_now = "Yes" if row['Is delivering now'] == 1 else "No"
-                table_booking = "Yes" if row['Has Table booking'] == 1 else "No"
-                cuisine = row.get('Primary Cuisine', row['Cuisines'])
-
-                st.markdown(f"""
-                <div class='info-box'>
-                    <h4>{row['Restaurant Name']}</h4>
-                    <b>📍 Address:</b> {row['Address']}<br>
-                    <b>🍲 Cuisine:</b> {cuisine}<br>
-                    <b>💻 Online Delivery:</b> {online_delivery} | <b>🚚 Delivering Now:</b> {delivering_now}<br>
-                    <b>🍽️ Table Booking:</b> {table_booking}<br>
-                    <b>⭐ Rating:</b> {row['Aggregate rating']} | <b>💰 Price Range:</b> {row['Price range']}<br>
-                </div>
-                """, unsafe_allow_html=True)
-        else:
-            st.warning("No restaurants found for this city.")
-
-st.markdown('</div>', unsafe_allow_html=True)  # close input-container
-st.markdown('</div>', unsafe_allow_html=True)  # close main-container
+st.markdown('</div>', unsafe_allow_html=True)
