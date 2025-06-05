@@ -21,20 +21,6 @@ This project analyzes Zomato restaurant data to provide insights and personalize
 * Pickle — For fast loading of preprocessed datasets.
 * HTML & CSS — Custom styling embedded in Streamlit markdown.
 
--- Repository Structure
-bash
-Copy
-Edit
-/models
-  ├── processed.pkl           # Master country list and metadata
-  ├── india.pkl               # Processed Zomato data for India
-  ├── usa.pkl                 # Processed Zomato data for USA
-  └── ...                    # Other countries' data files
-.github/worflows/
-app.py                       # Main Streamlit app script
-rocket-3972_128.gif          # Background GIF file
-requirements.txt             # Python dependencies
-README.md                    # This file
 
 -- How to Run Locally
 Clone the repo
